@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+FROM ngc.nju.edu.cn/nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
 
 ARG VENV_NAME="cosyvoice"
 ENV VENV=$VENV_NAME
@@ -8,10 +8,13 @@ ENV DEBIAN_FRONTEN=noninteractive
 ENV PYTHONUNBUFFERED=1
 SHELL ["/bin/bash", "--login", "-c"]
 
-RUN apt-get update -y --fix-missing
+RUN apt-get update -y  --fix-missing
 RUN apt-get install -y git build-essential curl wget ffmpeg unzip git git-lfs sox libsox-dev && \
     apt-get clean && \
     git lfs install
+
+ARG HTTPS_PROXY=http://127.0.0.1:7897
+ARG HTTP_PROXY=http://127.0.0.1:7897
 
 # ==================================================================
 # conda install and conda forge channel as default
