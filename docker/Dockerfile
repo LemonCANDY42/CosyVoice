@@ -64,4 +64,14 @@ RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5
 RUN conda activate ${VENV} && cd CosyVoice && \
     pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
 
+RUN cd /workspace/CosyVoice && mkdir -p pretrained_models && \
+    git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
+    git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git pretrained_models/CosyVoice-ttsfrd  && \
+    git clone https://www.modelscope.cn/iic/SenseVoiceSmall.git pretrained_models/SenseVoiceSmall
+
+RUN cd pretrained_models/CosyVoice-ttsfrd/  && \
+    unzip resource.zip -d . && \
+    pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
+    pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
+
 WORKDIR /workspace/CosyVoice
