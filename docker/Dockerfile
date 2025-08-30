@@ -50,6 +50,7 @@ RUN conda config --add channels conda-forge && \
 RUN conda create -y -n ${VENV} python=3.10
 ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
+RUN mkdir -p /workspace/CosyVoice
 
 WORKDIR /workspace
 
