@@ -1,4 +1,5 @@
-FROM ngc.nju.edu.cn/nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+# 12.8.1-cudnn-devel-ubuntu22.04
+FROM ngc.nju.edu.cn/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 
 ARG VENV_NAME="cosyvoice"
 ENV VENV=$VENV_NAME
@@ -52,6 +53,13 @@ ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
+RUN cd /workspace/CosyVoice && git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git iic/CosyVoice-ttsfrd
+
+RUN conda activate ${VENV} && cd /workspace/CosyVoice/iic/CosyVoice-ttsfrd  && \
+    unzip resource.zip -d . && \
+    pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
+    pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
+
 WORKDIR /workspace
 
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
@@ -65,14 +73,10 @@ RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5
 RUN conda activate ${VENV} && cd CosyVoice && \
     pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
 
-RUN cd /workspace/CosyVoice && mkdir -p pretrained_models && \
+RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
     git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
-    git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git pretrained_models/CosyVoice-ttsfrd  && \
+
     git clone https://www.modelscope.cn/iic/SenseVoiceSmall.git pretrained_models/SenseVoiceSmall
 
-RUN cd /workspace/CosyVoice/pretrained_models/CosyVoice-ttsfrd  && \
-    unzip resource.zip -d . && \
-    pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
-    pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
 
 WORKDIR /workspace/CosyVoice
