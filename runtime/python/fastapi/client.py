@@ -40,6 +40,22 @@ def main():
         }
         files = [('prompt_wav', ('prompt_wav', open(args.prompt_wav, 'rb'), 'application/octet-stream'))]
         response = requests.request("GET", url, data=payload, files=files, stream=True)
+    elif args.mode == 'tts':
+        url = "http://{}:{}/v1/tts".format(args.host, args.port)
+        print(f"Requesting TTS with url:{url}")
+        payload = {
+            'tts_text': args.tts_text,
+            "zero_shot_spk_id": 203,
+            "seed":42,
+            "speed": 1.0
+        }
+        # files = [('prompt_wav', ('prompt_wav', open(args.prompt_wav, 'rb'), 'application/octet-stream'))]
+        response = requests.post(url, json=payload, stream=True,
+                                headers={
+                                    "content-type": "application/json",
+                                },
+                                )
+        print(f"Response status code: {response.status_code}")
     else:
         payload = {
             'tts_text': args.tts_text,
@@ -48,6 +64,7 @@ def main():
         }
         response = requests.request("GET", url, data=payload, stream=True)
     tts_audio = b''
+    
     for r in response.iter_content(chunk_size=16000):
         tts_audio += r
     tts_speech = torch.from_numpy(np.array(np.frombuffer(tts_audio, dtype=np.int16))).unsqueeze(dim=0)
@@ -60,13 +77,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--host',
                         type=str,
-                        default='0.0.0.0')
+                        default='127.0.0.1')
     parser.add_argument('--port',
                         type=int,
-                        default='50000')
+                        default='8000')
     parser.add_argument('--mode',
-                        default='sft',
-                        choices=['sft', 'zero_shot', 'cross_lingual', 'instruct'],
+                        default='tts',
+                        choices=['sft', 'zero_shot', 'cross_lingual', 'instruct',"tts"],
                         help='request mode')
     parser.add_argument('--tts_text',
                         type=str,

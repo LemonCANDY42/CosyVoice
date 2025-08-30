@@ -128,6 +128,7 @@ class TTSRequest(BaseModel):
     tts_text: str
     zero_shot_spk_id: int
     seed: int
+    speed: float = 1.0
     
 class MaterialRequest(BaseModel):
     zero_shot_spk_id: int
@@ -142,17 +143,22 @@ async def tts(params: TTSRequest):
         {
             "tts_text": "欢迎使用视追智能的数字人直播系统！",
             "zero_shot_spk_id": 203,
-            "seed": 42
+            "seed": 42,
+            "speed":1.0
+            
         }
     """
     tts_text = params.tts_text
     zero_shot_spk_id = params.zero_shot_spk_id
     seed = params.seed
+    speed = params.speed
     # 说话人ID，用int类型
     if not isinstance(zero_shot_spk_id, int):
         raise InsufficientFundsError(message="zero_shot_spk_id is required and must be int", error_code=1004)
+    if not isinstance(speed, float):
+        raise InsufficientFundsError(message="speed is required and must be float", error_code=1006)
     set_all_random_seed(seed)
-    model_output = cosyvoice.inference_zero_shot(tts_text,'', '', zero_shot_spk_id)
+    model_output = cosyvoice.inference_zero_shot(tts_text,'', '', zero_shot_spk_id, stream=False, speed=speed)
     return StreamingResponse(generate_data(model_output))
 
 # @app.get("/api/v1/materials")
