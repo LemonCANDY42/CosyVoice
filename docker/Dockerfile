@@ -53,9 +53,9 @@ ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
-RUN cd /workspace/CosyVoice && git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git iic/CosyVoice-ttsfrd
+RUN cd /workspace && git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git iic/CosyVoice-ttsfrd
 
-RUN conda activate ${VENV} && cd /workspace/CosyVoice/iic/CosyVoice-ttsfrd  && \
+RUN conda activate ${VENV} && cd /workspace/iic/CosyVoice-ttsfrd  && \
     unzip resource.zip -d . && \
     pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
     pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
