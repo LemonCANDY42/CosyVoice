@@ -1,5 +1,4 @@
-# 12.8.1-cudnn-devel-ubuntu22.04
-FROM ngc.nju.edu.cn/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+FROM ngc.nju.edu.cn/nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
 
 ARG VENV_NAME="cosyvoice"
 ENV VENV=$VENV_NAME
