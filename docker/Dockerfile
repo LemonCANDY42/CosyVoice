@@ -76,5 +76,6 @@ RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_mod
     git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
     git clone https://www.modelscope.cn/iic/SenseVoiceSmall.git pretrained_models/SenseVoiceSmall
 
+RUN mv /workspace/iic/CosyVoice-ttsfrd /workspace/CosyVoice/pretrained_models/CosyVoice-ttsfrd
 
 WORKDIR /workspace/CosyVoice
