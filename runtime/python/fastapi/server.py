@@ -151,15 +151,18 @@ async def tts(params: TTSRequest):
     zero_shot_spk_id = params.zero_shot_spk_id
     seed = params.seed
     speed = params.speed
-    # 说话人ID，用int类型
-    if not isinstance(zero_shot_spk_id, int):
-        raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
-    if not isinstance(speed, float):
-        raise InsufficientFundsError(detail="speed is required and must be float", error_code=400)
-    if zero_shot_spk_id not in cosyvoice.frontend.spk2info.keys():
-        raise InsufficientFundsError(detail=f"zero_shot_spk_id {zero_shot_spk_id} not found", error_code=404)
-    set_all_random_seed(seed)
-    model_output = cosyvoice.inference_zero_shot(tts_text,'', '', zero_shot_spk_id, stream=False, speed=speed)
+    try:
+        # 说话人ID，用int类型
+        if not isinstance(zero_shot_spk_id, int):
+            raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
+        if not isinstance(speed, float):
+            raise InsufficientFundsError(detail="speed is required and must be float", error_code=400)
+        if zero_shot_spk_id not in cosyvoice.frontend.spk2info.keys():
+            raise InsufficientFundsError(detail=f"zero_shot_spk_id {zero_shot_spk_id} not found", error_code=404)
+        set_all_random_seed(seed)
+        model_output = cosyvoice.inference_zero_shot(tts_text, '', '', zero_shot_spk_id, stream=False, speed=speed)
+    except Exception as e:
+        raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
     return StreamingResponse(generate_data(model_output))
 
 # @app.get("/api/v1/materials")
@@ -177,26 +180,29 @@ async def materials(params: MaterialRequest):
     zero_shot_spk_id = params.zero_shot_spk_id
     materials_type = params.type
     link = params.link
-    if materials_type != 3:
-        # Only materials_type 3 is supported for tts.
-        raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
-    if not isinstance(zero_shot_spk_id, int):
-        raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
     try:
-        prompt_wav = str(Path(link))
-        prompt_text = prompt_wav_recognition(prompt_wav)
-        prompt_speech_16k = load_wav(prompt_wav, 16000)
-    except Exception as e:
-        raise InsufficientFundsError(detail="load wav/prompt_wav_recognition error:"+str(e), error_code=422)
-    
-    if cosyvoice.add_zero_shot_spk(prompt_text, prompt_speech_16k, zero_shot_spk_id):
+        if materials_type != 3:
+            # Only materials_type 3 is supported for tts.
+            raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
+        if not isinstance(zero_shot_spk_id, int):
+            raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
         try:
-            cosyvoice.save_spkinfo()
+            prompt_wav = str(Path(link))
+            prompt_text = prompt_wav_recognition(prompt_wav)
+            prompt_speech_16k = load_wav(prompt_wav, 16000)
         except Exception as e:
-            raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=422)
-        return {"message": "Material processed successfully!"}
-    else:
-        raise InsufficientFundsError(detail=f"Failed to process material", error_code=422)
+            raise InsufficientFundsError(detail="load wav/prompt_wav_recognition error:"+str(e), error_code=422)
+        
+        if cosyvoice.add_zero_shot_spk(prompt_text, prompt_speech_16k, zero_shot_spk_id):
+            try:
+                cosyvoice.save_spkinfo()
+            except Exception as e:
+                raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=422)
+            return {"message": "Material processed successfully!"}
+        else:
+            raise InsufficientFundsError(detail=f"Failed to process material", error_code=422)
+    except Exception as e:
+        raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
 
 @app.get("/api/v1/materials/list")
 async def materials_list(params: MaterialRequest):
@@ -207,12 +213,15 @@ async def materials_list(params: MaterialRequest):
             "type": 3,
         }
     """
-    materials_type = params.type
-    if materials_type != 3:
-        # Only materials_type 3 is supported for tts.
-        raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=422)
-    zero_shot_spk_id_list = cosyvoice.frontend.spk2info.keys()
-    return {"zero_shot_spk_id_list": list(zero_shot_spk_id_list)}
+    try:
+        materials_type = params.type
+        if materials_type != 3:
+            # Only materials_type 3 is supported for tts.
+            raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=422)
+        zero_shot_spk_id_list = cosyvoice.frontend.spk2info.keys()
+        return {"zero_shot_spk_id_list": list(zero_shot_spk_id_list)}
+    except Exception as e:
+        raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
 
 @app.get("/api/v1/materials/remove")
 @app.post("/api/v1/materials/remove")
@@ -232,28 +241,31 @@ async def materials_remove(params: MaterialRequest):
     """
     materials_type = params.type
     zero_shot_spk_id = params.zero_shot_spk_id
-    if materials_type != 3:
-        # Only materials_type 3 is supported for tts.
-        raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
-    if not isinstance(zero_shot_spk_id, (int, list)):
-        raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int or list", error_code=400)
-    if isinstance(zero_shot_spk_id, int):
-        zero_shot_spk_id = [zero_shot_spk_id]
-        
-    can_remove_spk_id = []
-    for spk_id in zero_shot_spk_id:
-        if spk_id in cosyvoice.frontend.spk2info.keys():
-            can_remove_spk_id.append(spk_id)    
-        else:
-            raise InsufficientFundsError(detail=f"zero_shot_spk_id {spk_id} not found", error_code=404)
-    
-    for spk_id in can_remove_spk_id:
-        cosyvoice.frontend.spk2info.pop(spk_id, None)
     try:
-        cosyvoice.save_spkinfo()
+        if materials_type != 3:
+            # Only materials_type 3 is supported for tts.
+            raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
+        if not isinstance(zero_shot_spk_id, (int, list)):
+            raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int or list", error_code=400)
+        if isinstance(zero_shot_spk_id, int):
+            zero_shot_spk_id = [zero_shot_spk_id]
+            
+        can_remove_spk_id = []
+        for spk_id in zero_shot_spk_id:
+            if spk_id in cosyvoice.frontend.spk2info.keys():
+                can_remove_spk_id.append(spk_id)    
+            else:
+                raise InsufficientFundsError(detail=f"zero_shot_spk_id {spk_id} not found", error_code=404)
+        
+        for spk_id in can_remove_spk_id:
+            cosyvoice.frontend.spk2info.pop(spk_id, None)
+        try:
+            cosyvoice.save_spkinfo()
+        except Exception as e:
+            raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=500)
+        return {"message": f"Material {can_remove_spk_id} removed successfully!"}
     except Exception as e:
-        raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=500)
-    return {"message": f"Material {can_remove_spk_id} removed successfully!"}
+        raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
