@@ -126,6 +126,7 @@ async def inference_instruct2(tts_text: str = Form(), instruct_text: str = Form(
 class TTSRequest(BaseModel):
     tts_text: str
     zero_shot_spk_id: int
+    instruct_text: str | None = None
     seed: int
     speed: float = 1.0
     
@@ -142,6 +143,7 @@ async def tts(params: TTSRequest):
         {
             "tts_text": "欢迎使用视追智能的数字人直播系统！",
             "zero_shot_spk_id": 203,
+            "instruct_text": "用带货主播的语气欢快的说",
             "seed": 42,
             "speed":1.0
             
@@ -149,6 +151,7 @@ async def tts(params: TTSRequest):
     """
     tts_text = params.tts_text
     zero_shot_spk_id = params.zero_shot_spk_id
+    instruct_text = params.instruct_text
     seed = params.seed
     speed = params.speed
     try:
@@ -160,7 +163,11 @@ async def tts(params: TTSRequest):
         if zero_shot_spk_id not in cosyvoice.frontend.spk2info.keys():
             raise InsufficientFundsError(detail=f"zero_shot_spk_id {zero_shot_spk_id} not found", error_code=404)
         set_all_random_seed(seed)
-        model_output = cosyvoice.inference_zero_shot(tts_text, '', '', zero_shot_spk_id, stream=False, speed=speed)
+        if instruct_text is not None and instruct_text != "":
+            print(f"tts_text: {tts_text}, instruct_text: {instruct_text}, zero_shot_spk_id: {zero_shot_spk_id}")
+            model_output = cosyvoice.inference_instruct2(tts_text, instruct_text, '', zero_shot_spk_id, stream=False, speed=speed)
+        else:
+            model_output = cosyvoice.inference_zero_shot(tts_text, '', '', zero_shot_spk_id, stream=False, speed=speed)
     except Exception as e:
         raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
     return StreamingResponse(generate_data(model_output))

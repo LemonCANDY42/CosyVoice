@@ -46,6 +46,7 @@ def main():
         payload = {
             'tts_text': args.tts_text,
             "zero_shot_spk_id": 203,
+            "instruct_text": "带货主播快速激情的语气", # 可以不提供该字段
             "seed":42,
             "speed": 1.0
         }
