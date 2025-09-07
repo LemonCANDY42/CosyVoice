@@ -85,17 +85,17 @@ RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && m
 RUN conda activate ${VENV} && cd CosyVoice && \
     pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
 
-RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
-    git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
-    git clone https://www.modelscope.cn/iic/SenseVoiceSmall.git pretrained_models/SenseVoiceSmall
+# RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
+#     git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
+#     git clone https://www.modelscope.cn/iic/SenseVoiceSmall.git pretrained_models/SenseVoiceSmall
 
-RUN cd /workspace && git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git iic/CosyVoice-ttsfrd
-RUN conda activate ${VENV} && cd /workspace/iic/CosyVoice-ttsfrd  && \
+COPY ./pretrained_models /workspace/CosyVoice/pretrained_models
+RUN [ -f "/workspace/CosyVoice/pretrained_models/CosyVoice2-0.5B/flow.decoder.estimator.fp16.mygpu.plan" ] && rm "/workspace/CosyVoice/pretrained_models/CosyVoice2-0.5B/flow.decoder.estimator.fp16.mygpu.plan"
+
+RUN conda activate ${VENV} && cd /workspace/CosyVoice/pretrained_models/CosyVoice-ttsfrd  && \
     unzip resource.zip -d . && \
     pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
     pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
-
-RUN mv /workspace/iic/CosyVoice-ttsfrd /workspace/CosyVoice/pretrained_models/CosyVoice-ttsfrd
 
 RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
     python -m nuitka --copyright="深圳视追智能科技有限公司" --remove-output --module /workspace/CosyVoice/runtime/python/fastapi/server.py && \

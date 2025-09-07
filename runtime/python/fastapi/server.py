@@ -33,7 +33,62 @@ from cosyvoice.utils.common import set_all_random_seed
 from funasr import AutoModel
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
 
-from pathlib import Path
+import threading
+import subprocess
+import logging
+from pathlib import Path    
+
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+# 配置多个NTP服务器（建议至少3个以提高可靠性）
+NTP_SERVERS = [
+    'pool.ntp.org',
+    'time.nist.gov',
+    'time.windows.com',
+    'ntp.aliyun.com',  # 阿里云NTP服务器
+    'cn.pool.ntp.org'  # 中国的NTP服务器池
+]
+
+def sync_time_with_ntpdate():
+    """
+    尝试从配置的NTP服务器列表中同步时间，直到成功或遍历所有服务器。
+    使用sudo执行ntpdate命令通常需要管理员权限。
+    """
+    for server in NTP_SERVERS:
+        try:
+            # 使用sudo执行ntpdate命令（需要权限）
+            # 注意：在某些系统上，可能需要配置免密码sudo或使用其他权限管理方式
+            cmd = ['ntpdate', '-u', server]  # -u 参数有助于绕过防火墙
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=10)
+            logger.info(f"时间同步成功 (服务器: {server}): {result.stdout}")
+            return True  # 同步成功则退出
+        except subprocess.CalledProcessError as e:
+            logger.error(f"服务器 {server} 同步失败，返回码 {e.returncode}: {e.stderr}")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"与服务器 {server} 的同步请求超时")
+        except FileNotFoundError:
+            logger.critical("系统中未找到 ntpdate 命令，请先安装 ntpdate 工具。")
+            break  # 如果找不到命令，则退出循环
+        except Exception as e:
+            logger.error(f"尝试与服务器 {server} 同步时发生未知错误: {e}")
+    logger.error("所有配置的NTP服务器同步均失败。")
+    return False
+
+
+def periodic_time_sync(interval=3600):
+    """
+    定期执行时间同步的函数
+    :param interval: 同步间隔时间（秒），默认3600秒（1小时）
+    """
+    while True:
+        sync_time_with_ntpdate()
+        # 等待下一次同步
+        threading.Event().wait(interval)
+
+from trust import TrustValidator
 
 def prompt_wav_recognition(prompt_wav):
     """Recognize text from a prompt wav file.
@@ -50,7 +105,7 @@ def prompt_wav_recognition(prompt_wav):
                             )
     text = res[0]["text"].split('|>')[-1]
     return text
-
+    
 app = FastAPI()
 # set cross region allowance
 app.add_middleware(
@@ -59,6 +114,32 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"])
+
+# 在启动时设置共享变量（例如，在应用的构造函数或生命周期事件中）
+app.state.shared_token = None  
+
+class LoginRequest(BaseModel):
+    token: str
+    
+SECRET_KEY = "my_super_secret_key_szzn"
+SALT = "fixed_salt_value_42"
+PRESET_STRING = "trust_verification_1111"
+
+validator = TrustValidator(SECRET_KEY, SALT, PRESET_STRING)
+
+@app.get("/login")
+@app.post("/login")
+async def login(params: LoginRequest):
+    app.state.shared_token = params.token
+    if validator.validate_server_token(app.state.shared_token):
+        return {"message": "Login successful", "token": app.state.shared_token}
+    return {"message": "Invalid credentials"}, 401
+
+# @app.get("/inference_sft")
+# @app.post("/inference_sft")
+# async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
+#     model_output = cosyvoice.inference_sft(tts_text, spk_id)
+#     return StreamingResponse(generate_data(model_output))
 
 # 1. 定义自定义异常
 class InsufficientFundsError(Exception):
@@ -84,42 +165,42 @@ def generate_data(model_output):
         yield tts_audio
 
 
-@app.get("/inference_sft")
-@app.post("/inference_sft")
-async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
-    model_output = cosyvoice.inference_sft(tts_text, spk_id)
-    return StreamingResponse(generate_data(model_output))
+# @app.get("/inference_sft")
+# @app.post("/inference_sft")
+# async def inference_sft(tts_text: str = Form(), spk_id: str = Form()):
+#     model_output = cosyvoice.inference_sft(tts_text, spk_id)
+#     return StreamingResponse(generate_data(model_output))
 
 
-@app.get("/inference_zero_shot")
-@app.post("/inference_zero_shot")
-async def inference_zero_shot(tts_text: str = Form(), prompt_text: str = Form(), prompt_wav: UploadFile = File()):
-    prompt_speech_16k = load_wav(prompt_wav.file, 16000)
-    model_output = cosyvoice.inference_zero_shot(tts_text, prompt_text, prompt_speech_16k)
-    return StreamingResponse(generate_data(model_output))
+# @app.get("/inference_zero_shot")
+# @app.post("/inference_zero_shot")
+# async def inference_zero_shot(tts_text: str = Form(), prompt_text: str = Form(), prompt_wav: UploadFile = File()):
+#     prompt_speech_16k = load_wav(prompt_wav.file, 16000)
+#     model_output = cosyvoice.inference_zero_shot(tts_text, prompt_text, prompt_speech_16k)
+#     return StreamingResponse(generate_data(model_output))
 
 
-@app.get("/inference_cross_lingual")
-@app.post("/inference_cross_lingual")
-async def inference_cross_lingual(tts_text: str = Form(), prompt_wav: UploadFile = File()):
-    prompt_speech_16k = load_wav(prompt_wav.file, 16000)
-    model_output = cosyvoice.inference_cross_lingual(tts_text, prompt_speech_16k)
-    return StreamingResponse(generate_data(model_output))
+# @app.get("/inference_cross_lingual")
+# @app.post("/inference_cross_lingual")
+# async def inference_cross_lingual(tts_text: str = Form(), prompt_wav: UploadFile = File()):
+#     prompt_speech_16k = load_wav(prompt_wav.file, 16000)
+#     model_output = cosyvoice.inference_cross_lingual(tts_text, prompt_speech_16k)
+#     return StreamingResponse(generate_data(model_output))
 
 
-@app.get("/inference_instruct")
-@app.post("/inference_instruct")
-async def inference_instruct(tts_text: str = Form(), spk_id: str = Form(), instruct_text: str = Form()):
-    model_output = cosyvoice.inference_instruct(tts_text, spk_id, instruct_text)
-    return StreamingResponse(generate_data(model_output))
+# @app.get("/inference_instruct")
+# @app.post("/inference_instruct")
+# async def inference_instruct(tts_text: str = Form(), spk_id: str = Form(), instruct_text: str = Form()):
+#     model_output = cosyvoice.inference_instruct(tts_text, spk_id, instruct_text)
+#     return StreamingResponse(generate_data(model_output))
 
 
-@app.get("/inference_instruct2")
-@app.post("/inference_instruct2")
-async def inference_instruct2(tts_text: str = Form(), instruct_text: str = Form(), prompt_wav: UploadFile = File()):
-    prompt_speech_16k = load_wav(prompt_wav.file, 16000)
-    model_output = cosyvoice.inference_instruct2(tts_text, instruct_text, prompt_speech_16k)
-    return StreamingResponse(generate_data(model_output))
+# @app.get("/inference_instruct2")
+# @app.post("/inference_instruct2")
+# async def inference_instruct2(tts_text: str = Form(), instruct_text: str = Form(), prompt_wav: UploadFile = File()):
+#     prompt_speech_16k = load_wav(prompt_wav.file, 16000)
+#     model_output = cosyvoice.inference_instruct2(tts_text, instruct_text, prompt_speech_16k)
+#     return StreamingResponse(generate_data(model_output))
 
 # 看这里
 # 1. 定义 Pydantic 模型来描述请求体结构
@@ -155,19 +236,22 @@ async def tts(params: TTSRequest):
     seed = params.seed
     speed = params.speed
     try:
-        # 说话人ID，用int类型
-        if not isinstance(zero_shot_spk_id, int):
-            raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
-        if not isinstance(speed, float):
-            raise InsufficientFundsError(detail="speed is required and must be float", error_code=400)
-        if zero_shot_spk_id not in cosyvoice.frontend.spk2info.keys():
-            raise InsufficientFundsError(detail=f"zero_shot_spk_id {zero_shot_spk_id} not found", error_code=404)
-        set_all_random_seed(seed)
-        if instruct_text is not None and instruct_text != "":
-            print(f"tts_text: {tts_text}, instruct_text: {instruct_text}, zero_shot_spk_id: {zero_shot_spk_id}")
-            model_output = cosyvoice.inference_instruct2(tts_text, instruct_text, '', zero_shot_spk_id, stream=False, speed=speed)
+        if validator.validate_server_token(app.state.shared_token):
+            # 说话人ID，用int类型
+            if not isinstance(zero_shot_spk_id, int):
+                raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
+            if not isinstance(speed, float):
+                raise InsufficientFundsError(detail="speed is required and must be float", error_code=400)
+            if zero_shot_spk_id not in cosyvoice.frontend.spk2info.keys():
+                raise InsufficientFundsError(detail=f"zero_shot_spk_id {zero_shot_spk_id} not found", error_code=404)
+            set_all_random_seed(seed)
+            if instruct_text is not None and instruct_text != "":
+                print(f"tts_text: {tts_text}, instruct_text: {instruct_text}, zero_shot_spk_id: {zero_shot_spk_id}")
+                model_output = cosyvoice.inference_instruct2(tts_text, instruct_text, '', zero_shot_spk_id, stream=False, speed=speed)
+            else:
+                model_output = cosyvoice.inference_zero_shot(tts_text, '', '', zero_shot_spk_id, stream=False, speed=speed)
         else:
-            model_output = cosyvoice.inference_zero_shot(tts_text, '', '', zero_shot_spk_id, stream=False, speed=speed)
+            raise InsufficientFundsError(detail="Invalid token", error_code=401)
     except Exception as e:
         raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
     return StreamingResponse(generate_data(model_output))
@@ -188,26 +272,29 @@ async def materials(params: MaterialRequest):
     materials_type = params.type
     link = params.link
     try:
-        if materials_type != 3:
-            # Only materials_type 3 is supported for tts.
-            raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
-        if not isinstance(zero_shot_spk_id, int):
-            raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
-        try:
-            prompt_wav = str(Path(link))
-            prompt_text = prompt_wav_recognition(prompt_wav)
-            prompt_speech_16k = load_wav(prompt_wav, 16000)
-        except Exception as e:
-            raise InsufficientFundsError(detail="load wav/prompt_wav_recognition error:"+str(e), error_code=422)
-        
-        if cosyvoice.add_zero_shot_spk(prompt_text, prompt_speech_16k, zero_shot_spk_id):
+        if validator.validate_server_token(app.state.shared_token):
+            if materials_type != 3:
+                # Only materials_type 3 is supported for tts.
+                raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
+            if not isinstance(zero_shot_spk_id, int):
+                raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
             try:
-                cosyvoice.save_spkinfo()
+                prompt_wav = str(Path(link))
+                prompt_text = prompt_wav_recognition(prompt_wav)
+                prompt_speech_16k = load_wav(prompt_wav, 16000)
             except Exception as e:
-                raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=422)
-            return {"message": "Material processed successfully!"}
+                raise InsufficientFundsError(detail="load wav/prompt_wav_recognition error:"+str(e), error_code=422)
+            
+            if cosyvoice.add_zero_shot_spk(prompt_text, prompt_speech_16k, zero_shot_spk_id):
+                try:
+                    cosyvoice.save_spkinfo()
+                except Exception as e:
+                    raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=422)
+                return {"message": "Material processed successfully!"}
+            else:
+                raise InsufficientFundsError(detail=f"Failed to process material", error_code=422)
         else:
-            raise InsufficientFundsError(detail=f"Failed to process material", error_code=422)
+            raise InsufficientFundsError(detail="Invalid token", error_code=401)
     except Exception as e:
         raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
 
@@ -221,12 +308,15 @@ async def materials_list(params: MaterialRequest):
         }
     """
     try:
-        materials_type = params.type
-        if materials_type != 3:
-            # Only materials_type 3 is supported for tts.
-            raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=422)
-        zero_shot_spk_id_list = cosyvoice.frontend.spk2info.keys()
-        return {"zero_shot_spk_id_list": list(zero_shot_spk_id_list)}
+        if validator.validate_server_token(app.state.shared_token):
+            materials_type = params.type
+            if materials_type != 3:
+                # Only materials_type 3 is supported for tts.
+                raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=422)
+            zero_shot_spk_id_list = cosyvoice.frontend.spk2info.keys()
+            return {"zero_shot_spk_id_list": list(zero_shot_spk_id_list)}
+        else:
+            raise InsufficientFundsError(detail="Invalid token", error_code=401)
     except Exception as e:
         raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
 
@@ -249,31 +339,72 @@ async def materials_remove(params: MaterialRequest):
     materials_type = params.type
     zero_shot_spk_id = params.zero_shot_spk_id
     try:
-        if materials_type != 3:
-            # Only materials_type 3 is supported for tts.
-            raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
-        if not isinstance(zero_shot_spk_id, (int, list)):
-            raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int or list", error_code=400)
-        if isinstance(zero_shot_spk_id, int):
-            zero_shot_spk_id = [zero_shot_spk_id]
+        if validator.validate_server_token(app.state.shared_token):
+            if materials_type != 3:
+                # Only materials_type 3 is supported for tts.
+                raise InsufficientFundsError(detail=f"unknown type:{materials_type}", error_code=400)
+            if not isinstance(zero_shot_spk_id, (int, list)):
+                raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int or list", error_code=400)
+            if isinstance(zero_shot_spk_id, int):
+                zero_shot_spk_id = [zero_shot_spk_id]
+                
+            can_remove_spk_id = []
+            for spk_id in zero_shot_spk_id:
+                if spk_id in cosyvoice.frontend.spk2info.keys():
+                    can_remove_spk_id.append(spk_id)    
+                else:
+                    raise InsufficientFundsError(detail=f"zero_shot_spk_id {spk_id} not found", error_code=404)
             
-        can_remove_spk_id = []
-        for spk_id in zero_shot_spk_id:
-            if spk_id in cosyvoice.frontend.spk2info.keys():
-                can_remove_spk_id.append(spk_id)    
-            else:
-                raise InsufficientFundsError(detail=f"zero_shot_spk_id {spk_id} not found", error_code=404)
-        
-        for spk_id in can_remove_spk_id:
-            cosyvoice.frontend.spk2info.pop(spk_id, None)
-        try:
-            cosyvoice.save_spkinfo()
-        except Exception as e:
-            raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=500)
-        return {"message": f"Material {can_remove_spk_id} removed successfully!"}
+            for spk_id in can_remove_spk_id:
+                cosyvoice.frontend.spk2info.pop(spk_id, None)
+            try:
+                cosyvoice.save_spkinfo()
+            except Exception as e:
+                raise InsufficientFundsError(detail="save_spkinfo error:"+str(e), error_code=500)
+            return {"message": f"Material {can_remove_spk_id} removed successfully!"}
+        else:
+            raise InsufficientFundsError(detail="Invalid token", error_code=401)
     except Exception as e:
         raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
 
+class Server:
+    def __init__(self, **kwargs):
+        self.host = kwargs.get("host", "0.0.0.0")
+        self.port = kwargs.get("port", 8000)
+        self.asr_model_path = kwargs.get("asr_model_path", "/workspace/CosyVoice/pretrained_models/SenseVoiceSmall")
+        self.model_dir = kwargs.get("model_dir", "/workspace/CosyVoice/pretrained_models/CosyVoice2-0.5B")
+        self.load_jit = kwargs.get("load_jit", False)
+        self.load_trt = kwargs.get("load_trt", True)
+        self.fp16 = kwargs.get("fp16", True)
+        self.spk2info_path = kwargs.get("spk2info_path", "/workspace/mnt/data/materials/spk2info/spk2info.pt")
+    def run(self):
+        global cosyvoice, asr_model
+        # 创建并启动时间同步线程
+        # 设置为守护线程，这样当主程序退出时，线程也会退出
+        sync_thread = threading.Thread(target=periodic_time_sync, daemon=True)
+        sync_thread.start()
+        logger.info("时间同步线程已启动。")
+
+        # 启动 FastAPI 应用
+        # 使用 uvicorn 运行应用，指定主机和端口
+        logger.info("启动 FastAPI 应用...")
+
+        try:
+            cosyvoice = CosyVoice(self.model_dir, spk2info_path=Path(self.spk2info_path))
+        except Exception:
+            try:
+                cosyvoice = CosyVoice2(self.model_dir,load_jit=self.load_jit,load_trt=self.load_trt,fp16=self.fp16,spk2info_path=Path(self.spk2info_path))
+            except Exception as e:
+                raise e
+
+        asr_model = AutoModel(
+                model=self.asr_model_path,
+                disable_update=True,
+                log_level='DEBUG',
+                device="cuda:0")
+
+        uvicorn.run(app, host=self.host, port=self.port)
+        
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--port',
@@ -305,18 +436,12 @@ if __name__ == '__main__':
                         help='是否使用FP16精度')
     args = parser.parse_args()
 
-    try:
-        cosyvoice = CosyVoice(args.model_dir, spk2info_path=Path(args.spk2info_path))
-    except Exception:
-        try:
-            cosyvoice = CosyVoice2(args.model_dir,load_jit=args.load_jit,load_trt=args.load_trt,fp16=args.fp16,spk2info_path=Path(args.spk2info_path))
-        except Exception as e:
-            raise e
-
-    asr_model = AutoModel(
-            model=args.asr_model_path,
-            disable_update=True,
-            log_level='DEBUG',
-            device="cuda:0")
-    
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
+    tts_server = Server(host="0.0.0.0",
+                        port=args.port,
+                        model_dir=args.model_dir,
+                        load_jit=args.load_jit,
+                        asr_model_path=args.asr_model_path,
+                        spk2info_path=args.spk2info_path,
+                        load_trt=args.load_trt,
+                        fp16=args.fp16)
+    tts_server.run()

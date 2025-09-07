@@ -18,8 +18,26 @@ import torch
 import torchaudio
 import numpy as np
 
+from trust import TrustValidator
+SECRET_KEY = "my_super_secret_key_szzn"
+SALT = "fixed_salt_value_42"
+PRESET_STRING = "trust_verification_1111"
+
+validator = TrustValidator(SECRET_KEY, SALT, PRESET_STRING)
+
+# 客户端生成令牌
+TOKEN = validator.generate_client_token()
 
 def main():
+    url = "http://{}:{}/login".format(args.host, args.port)
+    payload = {
+        'token': TOKEN,
+    }
+    response = requests.post(url, json=payload, stream=False,
+                            headers={
+                                "content-type": "application/json",
+                            },
+                            )    
     url = "http://{}:{}/inference_{}".format(args.host, args.port, args.mode)
     if args.mode == 'sft':
         payload = {
@@ -45,8 +63,8 @@ def main():
         print(f"Requesting TTS with url:{url}")
         payload = {
             'tts_text': args.tts_text,
-            "zero_shot_spk_id": 203,
-            "instruct_text": "带货主播快速激情的语气", # 可以不提供该字段
+            "zero_shot_spk_id": 0,
+            # "instruct_text": "带货主播快速激情的语气", # 可以不提供该字段
             "seed":42,
             "speed": 1.0
         }
@@ -81,7 +99,7 @@ if __name__ == "__main__":
                         default='127.0.0.1')
     parser.add_argument('--port',
                         type=int,
-                        default='8000')
+                        default='18014')
     parser.add_argument('--mode',
                         default='tts',
                         choices=['sft', 'zero_shot', 'cross_lingual', 'instruct',"tts"],
@@ -107,4 +125,7 @@ if __name__ == "__main__":
                         default='demo.wav')
     args = parser.parse_args()
     prompt_sr, target_sr = 16000, 22050
+    
+    # for i in range(200):
     main()
+
