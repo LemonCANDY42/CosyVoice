@@ -63,15 +63,6 @@ ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
-WORKDIR /workspace
-
-ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
-
-RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
-    cd CosyVoice && \
-    git checkout Kenny && \
-    cd ..
-
 COPY ./requirements.txt /workspace/CosyVoice/requirements.txt
 
 RUN conda config --remove-key channels && \
@@ -84,6 +75,16 @@ RUN conda config --remove-key channels && \
 RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y libpython-static==3.10.18 gcc_linux-64=15.1.0 gxx_linux-64=15.1.0
 RUN conda activate ${VENV} && cd CosyVoice && \
     pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
+
+WORKDIR /workspace
+
+ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
+
+RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
+    cd CosyVoice && \
+    git checkout Kenny && \
+    cd ..
+
 
 # RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
 #     git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
