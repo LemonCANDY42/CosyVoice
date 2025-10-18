@@ -26,7 +26,7 @@ from cosyvoice.utils.class_utils import get_model_type
 
 class CosyVoice:
 
-    def __init__(self, model_dir, load_jit=False, load_trt=False, fp16=False, trt_concurrent=1):
+    def __init__(self, model_dir, load_jit=False, load_trt=False, fp16=False, trt_concurrent=1,spk2info_path=None):
         self.instruct = True if '-Instruct' in model_dir else False
         self.model_dir = model_dir
         self.fp16 = fp16
@@ -38,11 +38,12 @@ class CosyVoice:
         with open(hyper_yaml_path, 'r') as f:
             configs = load_hyperpyyaml(f)
         assert get_model_type(configs) != CosyVoice2Model, 'do not use {} for CosyVoice initialization!'.format(model_dir)
+        self.spk2info_path = spk2info_path if spk2info_path is not None else '{}/spk2info.pt'.format(model_dir)
         self.frontend = CosyVoiceFrontEnd(configs['get_tokenizer'],
                                           configs['feat_extractor'],
                                           '{}/campplus.onnx'.format(model_dir),
                                           '{}/speech_tokenizer_v1.onnx'.format(model_dir),
-                                          '{}/spk2info.pt'.format(model_dir),
+                                          self.spk2info_path,
                                           configs['allowed_special'])
         self.sample_rate = configs['sample_rate']
         if torch.cuda.is_available() is False and (load_jit is True or load_trt is True or fp16 is True):
@@ -76,7 +77,7 @@ class CosyVoice:
         return True
 
     def save_spkinfo(self):
-        torch.save(self.frontend.spk2info, '{}/spk2info.pt'.format(self.model_dir))
+        torch.save(self.frontend.spk2info, self.spk2info_path)
 
     def inference_sft(self, tts_text, spk_id, stream=False, speed=1.0, text_frontend=True):
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
@@ -141,7 +142,7 @@ class CosyVoice:
 
 class CosyVoice2(CosyVoice):
 
-    def __init__(self, model_dir, load_jit=False, load_trt=False, load_vllm=False, fp16=False, trt_concurrent=1):
+    def __init__(self, model_dir, load_jit=False, load_trt=False, load_vllm=False, fp16=False, trt_concurrent=1,spk2info_path=None):
         self.instruct = True if '-Instruct' in model_dir else False
         self.model_dir = model_dir
         self.fp16 = fp16
@@ -153,11 +154,12 @@ class CosyVoice2(CosyVoice):
         with open(hyper_yaml_path, 'r') as f:
             configs = load_hyperpyyaml(f, overrides={'qwen_pretrain_path': os.path.join(model_dir, 'CosyVoice-BlankEN')})
         assert get_model_type(configs) == CosyVoice2Model, 'do not use {} for CosyVoice2 initialization!'.format(model_dir)
+        self.spk2info_path = spk2info_path if spk2info_path is not None else '{}/spk2info.pt'.format(model_dir)
         self.frontend = CosyVoiceFrontEnd(configs['get_tokenizer'],
                                           configs['feat_extractor'],
                                           '{}/campplus.onnx'.format(model_dir),
                                           '{}/speech_tokenizer_v2.onnx'.format(model_dir),
-                                          '{}/spk2info.pt'.format(model_dir),
+                                          self.spk2info_path,
                                           configs['allowed_special'])
         self.sample_rate = configs['sample_rate']
         if torch.cuda.is_available() is False and (load_jit is True or load_trt is True or fp16 is True):

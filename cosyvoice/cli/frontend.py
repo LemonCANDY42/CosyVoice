@@ -154,7 +154,7 @@ class CosyVoiceFrontEnd:
         model_input = {'text': tts_text_token, 'text_len': tts_text_token_len, 'llm_embedding': embedding, 'flow_embedding': embedding}
         return model_input
 
-    def frontend_zero_shot(self, tts_text, prompt_text, prompt_speech_16k, resample_rate, zero_shot_spk_id):
+    def frontend_zero_shot(self, tts_text, prompt_text, prompt_speech_16k, resample_rate, zero_shot_spk_id, is_instruct2=False):
         tts_text_token, tts_text_token_len = self._extract_text_token(tts_text)
         if zero_shot_spk_id == '':
             prompt_text_token, prompt_text_token_len = self._extract_text_token(prompt_text)
@@ -173,7 +173,13 @@ class CosyVoiceFrontEnd:
                            'prompt_speech_feat': speech_feat, 'prompt_speech_feat_len': speech_feat_len,
                            'llm_embedding': embedding, 'flow_embedding': embedding}
         else:
-            model_input = self.spk2info[zero_shot_spk_id]
+            if is_instruct2 is True:
+                model_input = self.spk2info[zero_shot_spk_id].copy()
+                prompt_text_token, prompt_text_token_len = self._extract_text_token(prompt_text)
+                model_input['prompt_text'] = prompt_text_token
+                model_input['prompt_text_len'] = prompt_text_token_len
+            else:
+                model_input = self.spk2info[zero_shot_spk_id]
         model_input['text'] = tts_text_token
         model_input['text_len'] = tts_text_token_len
         return model_input
@@ -197,9 +203,12 @@ class CosyVoiceFrontEnd:
         return model_input
 
     def frontend_instruct2(self, tts_text, instruct_text, prompt_speech_16k, resample_rate, zero_shot_spk_id):
-        model_input = self.frontend_zero_shot(tts_text, instruct_text + '<|endofprompt|>', prompt_speech_16k, resample_rate, zero_shot_spk_id)
-        del model_input['llm_prompt_speech_token']
-        del model_input['llm_prompt_speech_token_len']
+        model_input = self.frontend_zero_shot(tts_text, instruct_text + '<|endofprompt|>', prompt_speech_16k, resample_rate, zero_shot_spk_id,is_instruct2=True)
+        if 'llm_prompt_speech_token' in model_input:
+            # in instruct2 mode, we remove prompt in llm
+            del model_input['llm_prompt_speech_token']
+        if 'llm_prompt_speech_token_len' in model_input:
+            del model_input['llm_prompt_speech_token_len']
         return model_input
 
     def frontend_vc(self, source_speech_16k, prompt_speech_16k, resample_rate):
