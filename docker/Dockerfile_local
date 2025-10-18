@@ -41,7 +41,8 @@ ARG HTTP_PROXY=http://host.docker.internal:7897
 # ------------------------------------------------------------------
 # Install miniforge
 # RUN wget --quiet -e  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O ~/miniforge.sh
-RUN curl -L -o ~/miniforge.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+# RUN curl -L -o ~/miniforge.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+COPY ./Miniforge3-Linux-x86_64.sh  /root/miniforge.sh
 RUN /bin/bash ~/miniforge.sh -b -p /opt/conda && \
     rm ~/miniforge.sh && \
     ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
@@ -63,8 +64,6 @@ ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
-COPY ./requirements.txt /workspace/CosyVoice/requirements.txt
-
 RUN conda config --remove-key channels && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free && \
@@ -73,18 +72,19 @@ RUN conda config --remove-key channels && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/ && \
     conda config --set show_channel_urls yes
 RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y libpython-static==3.10.18 gcc_linux-64=15.1.0 gxx_linux-64=15.1.0
-RUN conda activate ${VENV} && cd CosyVoice && \
-    pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
 
 WORKDIR /workspace
 
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
 
 RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
-    cd CosyVoice && \
+    cd /workspace/CosyVoice && \
     git checkout Kenny && \
     cd ..
 
+COPY ./requirements.txt /workspace/CosyVoice/requirements.txt
+RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
+    pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
 
 # RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
 #     git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
@@ -105,6 +105,7 @@ RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
     rm /workspace/CosyVoice/runtime/python/fastapi/server.py && rm /workspace/CosyVoice/runtime/python/fastapi/trust.py && rm /workspace/CosyVoice/runtime/python/fastapi/client.py && \
     rm server.pyi && rm trust.pyi
 
+RUN rm -rf /workspace/CosyVoice/.git && rm -rf /workspace/CosyVoice/docker
 # --follow-imports --enable-plugin=no-qt --jobs=20  --static-libpython=no --include-package-data=triton --include-package=triton --include-package=transformers --include-package=torch --module-parameter=torch-disable-jit=yes --module-parameter=numba-disable-jit=yes  --include-distribution-metadata=websockets --include-distribution-metadata=threadpoolctl --include-distribution-metadata=ttsfrd --include-distribution-metadata=torchaudio --include-distribution-metadata=torch --include-distribution-metadata=hydra-core --include-distribution-metadata=tiktoken --include-distribution-metadata=rich --include-distribution-metadata=transformers --include-distribution-metadata=tokenizers --include-distribution-metadata=torch-complex --include-distribution-metadata=triton --include-distribution-metadata=openai-whisper --include-distribution-metadata=jieba --include-distribution-metadata=uvicorn --include-distribution-metadata=soundfile --include-distribution-metadata=librosa --include-distribution-metadata=funasr --include-distribution-metadata=deepspeed --include-distribution-metadata=onnx --include-distribution-metadata=onnxruntime-gpu --include-distribution-metadata=tensorboard --include-distribution-metadata=tensorrt-cu12 --mode=standalone /workspace/CosyVoice/runtime/python/fastapi/server.py
 
 WORKDIR /workspace/CosyVoice

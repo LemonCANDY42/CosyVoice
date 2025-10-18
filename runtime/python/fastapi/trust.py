@@ -125,11 +125,11 @@ if __name__ == "__main__":
     
     # 客户端生成令牌
     token = validator.generate_client_token()
-    # print(f"Generated token: {token}")
+    print(f"Generated token: {token}")
     
     # 服务端验证令牌
     is_valid = validator.validate_server_token(token)
-    # print(f"Token validation result: {is_valid}")
+    print(f"Token validation result: {is_valid}")
     
     # 测试无效令牌
     invalid_token = "invalid_base64_string"
