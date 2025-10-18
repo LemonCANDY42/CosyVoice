@@ -1,7 +1,7 @@
---extra-index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://download.pytorch.org/whl/cu129
 --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ # https://github.com/microsoft/onnxruntime/issues/21684
 conformer==0.3.2
-deepspeed==0.15.1; sys_platform == 'linux'
+deepspeed==0.18.0; sys_platform == 'linux'# 0.15.1; sys_platform == 'linux'
 diffusers==0.35.1 # 0.29.0
 fastapi==0.119.0 # 0.115.6
 fastapi-cli==0.0.13 # 0.0.4
@@ -19,7 +19,7 @@ modelscope==1.31.0 # 1.20.0
 networkx==3.5 #3.1
 omegaconf==2.3.0
 onnx==1.19.1 # 1.17.0
-onnxruntime-gpu==1.23.0; sys_platform == 'linux' # 1.22.0; sys_platform == 'linux'
+# onnxruntime-gpu==1.23.0; sys_platform == 'linux' # 1.22.0; sys_platform == 'linux'
 onnxruntime==1.23.0; sys_platform == 'darwin' or sys_platform == 'win32' # 1.22.0; sys_platform == 'darwin' or sys_platform == 'win32'
 openai-whisper==20250625
 protobuf==6.32.1 # 4.25
@@ -28,12 +28,12 @@ pydantic==2.12.3 # 2.7.0
 pyworld==0.3.5 # 0.3.4
 rich==14.2.0 # 13.7.1
 soundfile==0.13.1 # 0.12.1
-tensorboard==2.14.0
-tensorrt-cu13==10.13.3.9; sys_platform == 'linux' # tensorrt-cu12==10.13.2.6; sys_platform == 'linux'
-tensorrt-cu13-bindings==10.13.3.9; sys_platform == 'linux' # tensorrt-cu12-bindings==10.13.2.6; sys_platform == 'linux'
-tensorrt-cu13-libs==10.13.3.9; sys_platform == 'linux' # tensorrt-cu12-libs==10.13.2.6; sys_platform == 'linux'
-torch==2.9.0+cu130 # 2.7.1+cu128
-torchaudio==2.9.0+cu130 # 2.7.1+cu128
+tensorboard==2.20.0 # 2.14.0
+tensorrt-cu12==10.13.3.9; sys_platform == 'linux' # tensorrt-cu12==10.13.2.6; sys_platform == 'linux'
+tensorrt-cu12-bindings==10.13.3.9; sys_platform == 'linux' # tensorrt-cu12-bindings==10.13.2.6; sys_platform == 'linux'
+tensorrt-cu12-libs==10.13.3.9; sys_platform == 'linux' # tensorrt-cu12-libs==10.13.2.6; sys_platform == 'linux'
+torch==2.9.0+cu129 # 2.7.1+cu128
+torchaudio==2.9.0+cu129 # 2.7.1+cu128
 transformers==4.57.1 # 4.51.3
 uvicorn==0.37.0 # 0.30.0
 wetext==0.0.4

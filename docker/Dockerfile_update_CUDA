@@ -1,4 +1,4 @@
-FROM ngc.nju.edu.cn/nvidia/cuda:13.0.1-cudnn-devel-ubuntu24.04
+FROM ngc.nju.edu.cn/nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04
 
 LABEL maintainer="l.w.r.f.42@gmail.com"
 LABEL version="2.4.0"
