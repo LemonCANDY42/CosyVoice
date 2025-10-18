@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import uvicorn
 import numpy as np
+import torch
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('{}/../../..'.format(ROOT_DIR))
 sys.path.append('{}/../../../third_party/Matcha-TTS'.format(ROOT_DIR))
@@ -237,23 +238,88 @@ async def tts(params: TTSRequest):
     speed = params.speed
     try:
         if validator.validate_server_token(app.state.shared_token):
-            # 说话人ID，用int类型
+            # ========== 严格的输入验证，避免无效输入导致模型异常 ==========
+            
+            # 1. 验证 tts_text
+            if not isinstance(tts_text, str):
+                raise InsufficientFundsError(detail="tts_text must be a string", error_code=400)
+            if not tts_text or len(tts_text.strip()) == 0:
+                raise InsufficientFundsError(detail="tts_text cannot be empty", error_code=400)
+            if len(tts_text) > 1000:
+                raise InsufficientFundsError(detail="tts_text too long (max 1000 characters)", error_code=400)
+            
+            # 2. 验证 zero_shot_spk_id
             if not isinstance(zero_shot_spk_id, int):
                 raise InsufficientFundsError(detail="zero_shot_spk_id is required and must be int", error_code=400)
-            if not isinstance(speed, float):
-                raise InsufficientFundsError(detail="speed is required and must be float", error_code=400)
             if zero_shot_spk_id not in cosyvoice.frontend.spk2info.keys():
                 raise InsufficientFundsError(detail=f"zero_shot_spk_id {zero_shot_spk_id} not found", error_code=404)
+            
+            # 3. 验证 speed
+            if not isinstance(speed, (int, float)):
+                raise InsufficientFundsError(detail="speed must be a number (float or int)", error_code=400)
+            speed = float(speed)  # 确保是 float
+            if speed <= 0 or speed > 2.0:
+                raise InsufficientFundsError(detail="speed must be between 0 and 2.0", error_code=400)
+            
+            # 4. 验证 seed
+            if not isinstance(seed, int):
+                raise InsufficientFundsError(detail="seed must be an integer", error_code=400)
+            if seed < 0 or seed > 2**31 - 1:
+                raise InsufficientFundsError(detail="seed must be between 0 and 2147483647", error_code=400)
+            
+            # 5. 验证 instruct_text（如果提供）
+            if instruct_text is not None and not isinstance(instruct_text, str):
+                raise InsufficientFundsError(detail="instruct_text must be a string", error_code=400)
+            
+            # ========== 输入验证通过，开始推理 ==========
+            
             set_all_random_seed(seed)
+            
             if instruct_text is not None and instruct_text != "":
-                print(f"tts_text: {tts_text}, instruct_text: {instruct_text}, zero_shot_spk_id: {zero_shot_spk_id}")
+                logger.debug(f"Using instruct2 mode: tts_text={tts_text[:100]}, instruct_text={instruct_text}")
                 model_output = cosyvoice.inference_instruct2(tts_text, instruct_text, '', zero_shot_spk_id, stream=False, speed=speed)
             else:
+                logger.debug(f"Using zero_shot mode: tts_text={tts_text[:100]}")
                 model_output = cosyvoice.inference_zero_shot(tts_text, '', '', zero_shot_spk_id, stream=False, speed=speed)
+            
         else:
             raise InsufficientFundsError(detail="Invalid token", error_code=401)
+            
+    except InsufficientFundsError:
+        # 重新抛出业务异常
+        raise
+    except RuntimeError as e:
+        # 捕获 TensorRT 相关的运行时错误
+        error_msg = str(e)
+        logger.error(f"TTS RuntimeError: {error_msg}", exc_info=True)
+        
+        # 如果是 TensorRT context 超时，给出更明确的提示
+        if "TRT context" in error_msg or "timeout" in error_msg.lower():
+            logger.critical("TensorRT context pool exhausted! Possible resource leak detected.")
+            # 尝试清理 CUDA 资源
+            if torch.cuda.is_available():
+                try:
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    logger.info("CUDA cache cleared")
+                except Exception as cuda_err:
+                    logger.error(f"Failed to clear CUDA cache: {cuda_err}")
+        
+        raise InsufficientFundsError(detail=f"TensorRT error: {error_msg}", error_code=500)
     except Exception as e:
-        raise InsufficientFundsError(detail="error:"+str(e), error_code=500)
+        # 捕获其他所有异常
+        logger.error(f"TTS unexpected error: {type(e).__name__}: {str(e)}", exc_info=True)
+        
+        # 尝试清理 CUDA 资源
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            except:
+                pass
+        
+        raise InsufficientFundsError(detail=f"TTS error: {type(e).__name__}: {str(e)}", error_code=500)
+    
     return StreamingResponse(generate_data(model_output))
 
 # @app.get("/api/v1/materials")
@@ -375,6 +441,7 @@ class Server:
         self.model_dir = kwargs.get("model_dir", "/workspace/CosyVoice/pretrained_models/CosyVoice2-0.5B")
         self.load_jit = kwargs.get("load_jit", False)
         self.load_trt = kwargs.get("load_trt", True)
+        self.trt_concurrent = kwargs.get("trt_concurrent", 1)
         self.fp16 = kwargs.get("fp16", True)
         self.spk2info_path = kwargs.get("spk2info_path", "/workspace/mnt/data/materials/spk2info/spk2info.pt")
     def run(self):
@@ -393,7 +460,7 @@ class Server:
             cosyvoice = CosyVoice(self.model_dir, spk2info_path=Path(self.spk2info_path))
         except Exception:
             try:
-                cosyvoice = CosyVoice2(self.model_dir,load_jit=self.load_jit,load_trt=self.load_trt,fp16=self.fp16,spk2info_path=Path(self.spk2info_path))
+                cosyvoice = CosyVoice2(self.model_dir,load_jit=self.load_jit,load_trt=self.load_trt,fp16=self.fp16,trt_concurrent=self.trt_concurrent,spk2info_path=Path(self.spk2info_path))
             except Exception as e:
                 raise e
 
@@ -430,6 +497,10 @@ if __name__ == '__main__':
                         type=bool,
                         default=True,
                         help='是否加载TensorRT模型')
+    parser.add_argument('--trt_concurrent',
+                        type=int,
+                        default=1,
+                        help='TensorRT并发数')
     parser.add_argument('--fp16',
                         type=bool,
                         default=True,

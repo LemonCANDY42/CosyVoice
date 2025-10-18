@@ -82,7 +82,7 @@ ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_pa
 
 RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
     cd CosyVoice && \
-    git checkout Kenny && \
+    git checkout new-feat && \
     cd ..
 
 
@@ -102,7 +102,7 @@ RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
     python -m nuitka --copyright="深圳视追智能科技有限公司" --remove-output --module /workspace/CosyVoice/runtime/python/fastapi/server.py && \
     python -m nuitka --copyright="深圳视追智能科技有限公司" --remove-output --module /workspace/CosyVoice/runtime/python/fastapi/trust.py && \
     mv server.cpython-310-x86_64-linux-gnu.so /workspace/CosyVoice/runtime/python/fastapi && mv trust.cpython-310-x86_64-linux-gnu.so  /workspace/CosyVoice/runtime/python/fastapi && \
-    rm /workspace/CosyVoice/runtime/python/fastapi/server.py && rm /workspace/CosyVoice/runtime/python/fastapi/trust.py && rm /workspace/CosyVoice/runtime/python/fastapi/client.py && \
+    rm /workspace/CosyVoice/runtime/python/fastapi/server.py && rm /workspace/CosyVoice/runtime/python/fastapi/server.py && rm /workspace/CosyVoice/runtime/python/fastapi/trust.py && rm /workspace/CosyVoice/runtime/python/fastapi/client.py && \
     rm server.pyi && rm trust.pyi
 
 RUN rm -rf /workspace/CosyVoice/.git && rm -rf /workspace/CosyVoice/docker

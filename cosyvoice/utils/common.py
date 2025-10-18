@@ -18,6 +18,7 @@
 
 import queue
 import random
+import logging
 from typing import List
 
 import numpy as np
@@ -169,18 +170,89 @@ def mask_to_bias(mask: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
 
 
 class TrtContextWrapper:
-    def __init__(self, trt_engine, trt_concurrent=1, device='cuda:0'):
+    """TensorRT Context Pool Wrapper with timeout and health monitoring.
+    
+    Manages a pool of TensorRT execution contexts to prevent resource leakage
+    and provides timeout mechanism to avoid permanent blocking.
+    """
+    def __init__(self, trt_engine, trt_concurrent=1, device='cuda:0', acquire_timeout=30):
         self.trt_context_pool = queue.Queue(maxsize=trt_concurrent)
         self.trt_engine = trt_engine
-        for _ in range(trt_concurrent):
+        self.max_concurrent = trt_concurrent
+        self.acquire_timeout = acquire_timeout
+        self.device = device
+        self.acquired_count = 0
+        
+        logging.info(f"Initializing TrtContextWrapper with {trt_concurrent} contexts on {device}")
+        
+        for idx in range(trt_concurrent):
             trt_context = trt_engine.create_execution_context()
             trt_stream = torch.cuda.stream(torch.cuda.Stream(device))
-            assert trt_context is not None, 'failed to create trt context, maybe not enough CUDA memory, try reduce current trt concurrent {}'.format(trt_concurrent)
+            assert trt_context is not None, f'failed to create trt context #{idx}, maybe not enough CUDA memory, try reduce current trt concurrent {trt_concurrent}'
             self.trt_context_pool.put([trt_context, trt_stream])
-        assert self.trt_context_pool.empty() is False, 'no avaialbe estimator context'
+        
+        assert self.trt_context_pool.empty() is False, 'no available estimator context'
+        logging.info(f"TrtContextWrapper initialized successfully with {trt_concurrent} contexts")
 
     def acquire_estimator(self):
-        return self.trt_context_pool.get(), self.trt_engine
+        """Acquire a TensorRT context from the pool with timeout.
+        
+        Returns:
+            tuple: ([context, stream], engine)
+            
+        Raises:
+            RuntimeError: If timeout occurs or pool is exhausted
+        """
+        try:
+            available_before = self.trt_context_pool.qsize()
+            if available_before == 0:
+                logging.error(f"TRT context pool is empty! Waiting for available context... (timeout={self.acquire_timeout}s)")
+            
+            result = self.trt_context_pool.get(timeout=self.acquire_timeout)
+            self.acquired_count += 1
+            
+            # available_after = self.trt_context_pool.qsize()
+            # if available_after <= 1:
+            #     logging.warning(f"TRT context pool running low: {available_after}/{self.max_concurrent} available")
+            
+            return result, self.trt_engine
+            
+        except queue.Empty:
+            error_msg = (f"Failed to acquire TRT context after {self.acquire_timeout}s timeout. "
+                        f"Available: {self.trt_context_pool.qsize()}/{self.max_concurrent}. "
+                        f"This likely indicates a resource leak - check that all acquired contexts are properly released.")
+            logging.error(error_msg)
+            raise RuntimeError(error_msg)
 
     def release_estimator(self, context, stream):
-        self.trt_context_pool.put([context, stream])
+        """Release a TensorRT context back to the pool.
+        
+        Args:
+            context: TensorRT execution context
+            stream: CUDA stream
+        """
+        try:
+            self.trt_context_pool.put([context, stream], block=False)
+            self.acquired_count -= 1
+        except queue.Full:
+            logging.error("Failed to release TRT context - pool is full! This should never happen.")
+            # 这种情况理论上不应该发生，但如果发生了，至少记录下来
+            
+    def health_check(self):
+        """Check the health status of the context pool.
+        
+        Returns:
+            dict: Health status information
+        """
+        available = self.trt_context_pool.qsize()
+        status = {
+            'available': available,
+            'total': self.max_concurrent,
+            'in_use': self.max_concurrent - available,
+            'healthy': available > 0
+        }
+        
+        if available == 0:
+            logging.warning(f"TRT context pool health check FAILED: {status}")
+        
+        return status

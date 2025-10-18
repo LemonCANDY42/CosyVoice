@@ -26,6 +26,10 @@ if __name__ == "__main__":
                         type=bool,
                         default=True,
                         help='是否加载TensorRT模型')
+    parser.add_argument('--trt_concurrent',
+                        type=int,
+                        default=1,
+                        help='TensorRT并发数')
     parser.add_argument('--fp16',
                         type=bool,
                         default=True,
