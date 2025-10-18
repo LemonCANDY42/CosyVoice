@@ -27,7 +27,7 @@ RUN sed -i 's|http://.*archive.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt
 
 
 RUN apt-get update -y  --fix-missing && \
-    apt-get install -y git build-essential curl wget ffmpeg unzip git git-lfs sox libsox-dev && \
+    apt-get install -y git build-essential curl wget ffmpeg unzip git git-lfs sox libsox-dev  protobuf-compiler libprotobuf-dev && \
     apt-get clean && \
     git lfs install
 
@@ -82,8 +82,9 @@ RUN conda config --remove-key channels && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/ && \
     conda config --set show_channel_urls yes
 
-# libpython-static==3.10.19
-RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y  gcc_linux-64=15.1.0 gxx_linux-64=15.1.0 libpython-static==3.12.12
+# libpython-static==3.10.19 uild-essential python3-dev
+RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.7 && mamba install -y  gcc_linux-64=15.2.0  libpython-static==3.12.12  
+RUN conda activate ${VENV} &&  pip install --upgrade pip setuptools wheel
 RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
     pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
 
@@ -97,7 +98,7 @@ RUN cd /workspace && git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.gi
 RUN conda activate ${VENV} && cd /workspace/iic/CosyVoice-ttsfrd  && \
     unzip resource.zip -d . && \
     pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
-    pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
+    pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl && \    
 
 RUN mv /workspace/iic/CosyVoice-ttsfrd /workspace/CosyVoice/pretrained_models/CosyVoice-ttsfrd
 
