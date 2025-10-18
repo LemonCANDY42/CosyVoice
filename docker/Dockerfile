@@ -58,12 +58,21 @@ RUN conda config --add channels conda-forge && \
 # ~conda
 # ==================================================================
 
-RUN conda create -y -n ${VENV} python=3.10
+RUN conda create -y -n ${VENV} python=3.10.19
 ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
 COPY ./requirements.txt /workspace/CosyVoice/requirements.txt
+
+WORKDIR /workspace
+
+RUN rm -rf /workspace/CosyVoice/*
+
+RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
+    cd CosyVoice && \
+    git checkout new-feat && \
+    cd ..
 
 RUN conda config --remove-key channels && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main && \
@@ -72,19 +81,13 @@ RUN conda config --remove-key channels && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2 && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/ && \
     conda config --set show_channel_urls yes
-RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y libpython-static==3.10.18 gcc_linux-64=15.1.0 gxx_linux-64=15.1.0
-RUN conda activate ${VENV} && cd CosyVoice && \
-    pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
 
-WORKDIR /workspace
+RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y libpython-static==3.10.19 gcc_linux-64=15.1.0 gxx_linux-64=15.1.0
+RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
+    pip install uv && \
+    uv pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
 
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
-
-RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
-    cd CosyVoice && \
-    git checkout new-feat && \
-    cd ..
-
 
 RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
     git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
