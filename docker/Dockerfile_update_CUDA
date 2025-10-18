@@ -1,0 +1,114 @@
+FROM ngc.nju.edu.cn/nvidia/cuda:13.0.1-cudnn-devel-ubuntu24.04
+
+LABEL maintainer="l.w.r.f.42@gmail.com"
+LABEL version="2.4.0"
+LABEL description="在CosyVoice基础上开发，感谢CosyVoice的开源和商用许可。Copyright (c) 2025 深圳视追智能科技有限公司. All rights reserved."
+LABEL com.example.license="Copyright (c) 2025 深圳视追智能科技有限公司. All rights reserved."
+
+ARG VENV_NAME="cosyvoice"
+ENV VENV=$VENV_NAME
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+ENV DEBIAN_FRONTEN=noninteractive
+ENV PYTHONUNBUFFERED=1
+SHELL ["/bin/bash", "--login", "-c"]
+
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 换源
+RUN sed -i 's|http://.*archive.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list && \
+    sed -i 's|http://.*security.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y curl git && \
+    apt-get install -y ntpdate patchelf tzdata && \
+    # ntpdate pool.ntp.org && \
+    rm -rf /var/lib/apt/lists/*
+
+
+RUN apt-get update -y  --fix-missing && \
+    apt-get install -y git build-essential curl wget ffmpeg unzip git git-lfs sox libsox-dev && \
+    apt-get clean && \
+    git lfs install
+
+RUN git config --global http.proxy http://host.docker.internal:7897  && \
+    git config --global https.proxy http://host.docker.internal:7897
+
+ARG HTTPS_PROXY=http://host.docker.internal:7897
+ARG HTTP_PROXY=http://host.docker.internal:7897
+# ==================================================================
+# conda install and conda forge channel as default
+# ------------------------------------------------------------------
+# Install miniforge
+# RUN wget --quiet -e  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O ~/miniforge.sh
+RUN curl -L -o ~/miniforge.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+RUN /bin/bash ~/miniforge.sh -b -p /opt/conda && \
+    rm ~/miniforge.sh && \
+    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+    echo "source /opt/conda/etc/profile.d/conda.sh" >> /opt/nvidia/entrypoint.d/100.conda.sh && \
+    echo "source /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    echo "conda activate ${VENV}" >> /opt/nvidia/entrypoint.d/110.conda_default_env.sh && \
+    echo "conda activate ${VENV}" >> $HOME/.bashrc
+
+ENV PATH=/opt/conda/bin:$PATH
+
+RUN conda config --add channels conda-forge && \
+    conda config --set channel_priority strict
+# ------------------------------------------------------------------
+# ~conda
+# ==================================================================
+
+RUN conda create -y -n ${VENV} python=3.12.12
+ENV CONDA_DEFAULT_ENV=${VENV}
+ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
+RUN mkdir -p /workspace/CosyVoice
+
+COPY ./requirements_update_cuda.txt /workspace/CosyVoice/requirements.txt
+
+WORKDIR /workspace
+
+RUN rm -rf /workspace/CosyVoice/*
+
+RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
+    cd CosyVoice && \
+    git checkout new-feat && \
+    cd ..
+
+RUN conda config --remove-key channels && \
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main && \
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free && \
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r && \
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2 && \
+    conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/ && \
+    conda config --set show_channel_urls yes
+
+# libpython-static==3.10.19
+RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y  gcc_linux-64=15.1.0 gxx_linux-64=15.1.0 libpython-static==3.12.12
+RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
+    pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com  --no-cache-dir
+
+ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
+
+RUN conda activate ${VENV} && cd /workspace/CosyVoice && mkdir -p pretrained_models && \
+    git clone https://www.modelscope.cn/iic/CosyVoice2-0.5B.git pretrained_models/CosyVoice2-0.5B  && \
+    git clone https://www.modelscope.cn/iic/SenseVoiceSmall.git pretrained_models/SenseVoiceSmall
+
+RUN cd /workspace && git clone https://www.modelscope.cn/iic/CosyVoice-ttsfrd.git iic/CosyVoice-ttsfrd
+RUN conda activate ${VENV} && cd /workspace/iic/CosyVoice-ttsfrd  && \
+    unzip resource.zip -d . && \
+    pip install ttsfrd_dependency-0.1-py3-none-any.whl && \
+    pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
+
+RUN mv /workspace/iic/CosyVoice-ttsfrd /workspace/CosyVoice/pretrained_models/CosyVoice-ttsfrd
+
+RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
+    python -m nuitka --copyright="深圳视追智能科技有限公司" --remove-output --module /workspace/CosyVoice/runtime/python/fastapi/server.py && \
+    python -m nuitka --copyright="深圳视追智能科技有限公司" --remove-output --module /workspace/CosyVoice/runtime/python/fastapi/trust.py && \
+    mv server.cpython-310-x86_64-linux-gnu.so /workspace/CosyVoice/runtime/python/fastapi && mv trust.cpython-310-x86_64-linux-gnu.so  /workspace/CosyVoice/runtime/python/fastapi && \
+    rm /workspace/CosyVoice/runtime/python/fastapi/stress_test.py && rm /workspace/CosyVoice/runtime/python/fastapi/server.py && rm /workspace/CosyVoice/runtime/python/fastapi/trust.py && rm /workspace/CosyVoice/runtime/python/fastapi/client.py && \
+    rm server.pyi && rm trust.pyi
+
+RUN rm -rf /workspace/CosyVoice/.git && rm -rf /workspace/CosyVoice/docker
+# --follow-imports --enable-plugin=no-qt --jobs=20  --static-libpython=no --include-package-data=triton --include-package=triton --include-package=transformers --include-package=torch --module-parameter=torch-disable-jit=yes --module-parameter=numba-disable-jit=yes  --include-distribution-metadata=websockets --include-distribution-metadata=threadpoolctl --include-distribution-metadata=ttsfrd --include-distribution-metadata=torchaudio --include-distribution-metadata=torch --include-distribution-metadata=hydra-core --include-distribution-metadata=tiktoken --include-distribution-metadata=rich --include-distribution-metadata=transformers --include-distribution-metadata=tokenizers --include-distribution-metadata=torch-complex --include-distribution-metadata=triton --include-distribution-metadata=openai-whisper --include-distribution-metadata=jieba --include-distribution-metadata=uvicorn --include-distribution-metadata=soundfile --include-distribution-metadata=librosa --include-distribution-metadata=funasr --include-distribution-metadata=deepspeed --include-distribution-metadata=onnx --include-distribution-metadata=onnxruntime-gpu --include-distribution-metadata=tensorboard --include-distribution-metadata=tensorrt-cu12 --mode=standalone /workspace/CosyVoice/runtime/python/fastapi/server.py
+
+WORKDIR /workspace/CosyVoice
