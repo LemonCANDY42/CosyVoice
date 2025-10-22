@@ -63,7 +63,7 @@ ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
-COPY ./requirements_update_cuda.txt /workspace/CosyVoice/requirements.txt
+COPY ./requirements_update_vllm.txt /workspace/CosyVoice/requirements.txt
 
 WORKDIR /workspace
 
