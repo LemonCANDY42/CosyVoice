@@ -63,8 +63,6 @@ ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 RUN mkdir -p /workspace/CosyVoice
 
-COPY ./requirements.txt /workspace/CosyVoice/requirements.txt
-
 WORKDIR /workspace
 
 RUN rm -rf /workspace/CosyVoice/*
@@ -81,6 +79,8 @@ RUN conda config --remove-key channels && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2 && \
     conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/ && \
     conda config --set show_channel_urls yes
+
+COPY ./requirements_update_vllm.txt /workspace/CosyVoice/requirements.txt
 
 RUN conda activate ${VENV} && conda install -y -c conda-forge pynini==2.1.5 && mamba install -y libpython-static==3.10.19 gcc_linux-64=15.1.0 gxx_linux-64=15.1.0
 RUN conda activate ${VENV} && cd /workspace/CosyVoice && \
