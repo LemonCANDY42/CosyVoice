@@ -47,6 +47,8 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# 逗逗Hacker
+logger.info("Use vllm version: 0.7.2")
 
 # 配置多个NTP服务器（建议至少3个以提高可靠性）
 NTP_SERVERS = [
@@ -443,7 +445,8 @@ class Server:
         self.port = kwargs.get("port", 8000)
         self.asr_model_path = kwargs.get("asr_model_path", "/workspace/CosyVoice/pretrained_models/SenseVoiceSmall")
         self.model_dir = kwargs.get("model_dir", "/workspace/CosyVoice/pretrained_models/CosyVoice2-0.5B")
-        self.load_jit = kwargs.get("load_jit", False)
+        self.load_jit = kwargs.get("load_jit", True)
+        self.load_vllm = kwargs.get("load_vllm", True)
         self.load_trt = kwargs.get("load_trt", True)
         self.trt_concurrent = kwargs.get("trt_concurrent", 1)
         self.fp16 = kwargs.get("fp16", True)
@@ -464,7 +467,7 @@ class Server:
             cosyvoice = CosyVoice(self.model_dir, spk2info_path=Path(self.spk2info_path))
         except Exception:
             try:
-                cosyvoice = CosyVoice2(self.model_dir,load_jit=self.load_jit,load_trt=self.load_trt,fp16=self.fp16,trt_concurrent=self.trt_concurrent,spk2info_path=Path(self.spk2info_path))
+                cosyvoice = CosyVoice2(self.model_dir,load_jit=self.load_jit,load_trt=self.load_trt,load_vllm=self.load_vllm,fp16=self.fp16,trt_concurrent=self.trt_concurrent,spk2info_path=Path(self.spk2info_path))
             except Exception as e:
                 raise e
 
@@ -501,6 +504,10 @@ if __name__ == '__main__':
                         type=bool,
                         default=True,
                         help='是否加载TensorRT模型')
+    parser.add_argument('--load_vllm',
+                        type=bool,
+                        default=True,
+                        help='是否加载VLLM模型')
     parser.add_argument('--trt_concurrent',
                         type=int,
                         default=1,
@@ -515,6 +522,7 @@ if __name__ == '__main__':
                         port=args.port,
                         model_dir=args.model_dir,
                         load_jit=args.load_jit,
+                        load_vllm=args.load_vllm,
                         asr_model_path=args.asr_model_path,
                         spk2info_path=args.spk2info_path,
                         load_trt=args.load_trt,

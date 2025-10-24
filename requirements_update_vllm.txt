@@ -42,4 +42,3 @@ wget==3.2
 
 nuitka==2.7.13
 funasr==1.2.7
-

@@ -201,16 +201,18 @@ class TTSStressTester:
             if response.status_code == 200:
                 # 读取流式响应
                 audio_size = 0
-                for chunk in response.iter_content(chunk_size=8192):
-                    audio_size += len(chunk)
+                # for chunk in response.iter_content(chunk_size=8192):
+                #     # audio_size += len(chunk)
+                #     pass
                 
                 result['success'] = True
-                result['audio_size'] = audio_size
+                # result['audio_size'] = audio_size
                 
                 if expect_success:
                     logger.info(f"✓ Request #{request_id} 成功 - "
                               f"用时: {result['response_time']:.2f}s, "
-                              f"音频: {audio_size} bytes")
+                              # f"音频: {audio_size} bytes")
+                              )
                 else:
                     logger.warning(f"⚠ Request #{request_id} 异常请求却成功了")
             else:
