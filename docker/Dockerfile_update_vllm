@@ -68,7 +68,7 @@ WORKDIR /workspace
 RUN rm -rf /workspace/CosyVoice/*
 
 # 每次改变这里可以清空缓存
-ARG CACHE_BUST=1
+ARG CACHE_BUST=2
 RUN git clone --recursive https://github.com/LemonCANDY42/CosyVoice.git && \
     cd CosyVoice && \
     git checkout new-feat && \

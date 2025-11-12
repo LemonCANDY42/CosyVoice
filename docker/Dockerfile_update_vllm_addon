@@ -1,0 +1,5 @@
+FROM szzn/tts:v2.5.1
+
+COPY ./cosyvoice/cli/model.py /workspace/CosyVoice/cosyvoice/cli/model.py
+
+WORKDIR /workspace/CosyVoice

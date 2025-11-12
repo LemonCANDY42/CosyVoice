@@ -79,6 +79,7 @@ class CosyVoice:
     def save_spkinfo(self):
         torch.save(self.frontend.spk2info, self.spk2info_path)
 
+    @torch.inference_mode()
     def inference_sft(self, tts_text, spk_id, stream=False, speed=1.0, text_frontend=True):
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
             model_input = self.frontend.frontend_sft(i, spk_id)
@@ -90,6 +91,7 @@ class CosyVoice:
                 yield model_output
                 start_time = time.time()
 
+    @torch.inference_mode()
     def inference_zero_shot(self, tts_text, prompt_text, prompt_speech_16k, zero_shot_spk_id='', stream=False, speed=1.0, text_frontend=True):
         prompt_text = self.frontend.text_normalize(prompt_text, split=False, text_frontend=text_frontend)
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
@@ -104,6 +106,7 @@ class CosyVoice:
                 yield model_output
                 start_time = time.time()
 
+    @torch.inference_mode()
     def inference_cross_lingual(self, tts_text, prompt_speech_16k, zero_shot_spk_id='', stream=False, speed=1.0, text_frontend=True):
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
             model_input = self.frontend.frontend_cross_lingual(i, prompt_speech_16k, self.sample_rate, zero_shot_spk_id)
@@ -115,6 +118,7 @@ class CosyVoice:
                 yield model_output
                 start_time = time.time()
 
+    @torch.inference_mode()
     def inference_instruct(self, tts_text, spk_id, instruct_text, stream=False, speed=1.0, text_frontend=True):
         assert isinstance(self.model, CosyVoiceModel), 'inference_instruct is only implemented for CosyVoice!'
         if self.instruct is False:
@@ -130,6 +134,7 @@ class CosyVoice:
                 yield model_output
                 start_time = time.time()
 
+    @torch.inference_mode()
     def inference_vc(self, source_speech_16k, prompt_speech_16k, stream=False, speed=1.0):
         model_input = self.frontend.frontend_vc(source_speech_16k, prompt_speech_16k, self.sample_rate)
         start_time = time.time()
@@ -183,6 +188,7 @@ class CosyVoice2(CosyVoice):
     def inference_instruct(self, *args, **kwargs):
         raise NotImplementedError('inference_instruct is not implemented for CosyVoice2!')
 
+    @torch.inference_mode()
     def inference_instruct2(self, tts_text, instruct_text, prompt_speech_16k, zero_shot_spk_id='', stream=False, speed=1.0, text_frontend=True):
         assert isinstance(self.model, CosyVoice2Model), 'inference_instruct2 is only implemented for CosyVoice2!'
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
